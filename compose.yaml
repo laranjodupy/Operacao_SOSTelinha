@@ -1,0 +1,13 @@
+services:
+  balcao:
+    build: .
+    ports:
+      - "3000:3000"
+    env_file: .env.local
+    environment:
+      DATABASE_PATH: /app/data/tray-balcao.sqlite
+    volumes:
+      - balcao_data:/app/data
+    restart: unless-stopped
+volumes:
+  balcao_data:
