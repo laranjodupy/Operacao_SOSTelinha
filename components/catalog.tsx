@@ -13,10 +13,17 @@ import {
   X,
 } from "lucide-react";
 import { api, request } from "@/lib/client";
-import { money, type Product, type Snapshot } from "@/lib/types";
+import {
+  money,
+  type Product,
+  type Snapshot,
+  type CatalogDraft,
+} from "@/lib/types";
 import { Badge, Empty, Field, Modal, ProductArt, Spinner } from "./shared";
 
-import { tone, type Notice } from "./ui-types";
+import { type Notice } from "./ui-types";
+import { ProductAssistant } from "./catalog-assistant";
+import { CatalogReview } from "./catalog-review";
 
 export function Catalog({
   data: d,
@@ -32,7 +39,11 @@ export function Catalog({
     [editing, setEditing] = useState<Partial<Product> | null | undefined>(
       undefined,
     ),
-    [assistant, setAssistant] = useState(false);
+    [assistant, setAssistant] = useState(false),
+    [drafts, setDrafts] = useState<{
+      products: CatalogDraft[];
+      transcription?: string;
+    } | null>(null);
   const filtered = d.products.filter(
       (p) =>
         (category === "Todos" || p.category === category) &&
@@ -173,10 +184,19 @@ export function Catalog({
         <ProductAssistant
           data={d}
           onClose={() => setAssistant(false)}
-          onDraft={(p) => {
+          onDrafts={(products, transcription) => {
             setAssistant(false);
-            setEditing(p);
+            setDrafts({ products, transcription });
           }}
+          notify={notify}
+        />
+      )}
+      {drafts && (
+        <CatalogReview
+          products={drafts.products}
+          transcription={drafts.transcription}
+          onClose={() => setDrafts(null)}
+          refresh={refresh}
           notify={notify}
         />
       )}
@@ -331,182 +351,6 @@ function ProductForm({
             )}
           </button>
         </div>
-      </form>
-    </Modal>
-  );
-}
-function ProductAssistant({
-  data: d,
-  onClose,
-  onDraft,
-  notify,
-}: {
-  data: Snapshot;
-  onClose: () => void;
-  onDraft: (p: Partial<Product>) => void;
-  notify: Notice;
-}) {
-  const [text, setText] = useState(""),
-    [image, setImage] = useState<{
-      mimeType: string;
-      dataBase64: string;
-    } | null>(null),
-    [fileName, setFileName] = useState(""),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState(""),
-    [listening, setListening] = useState(false);
-  const recognition = useRef<any>(null);
-  useEffect(() => () => recognition.current?.abort(), []);
-  const listen = () => {
-    const w = window as any,
-      Speech = w.SpeechRecognition || w.webkitSpeechRecognition;
-    if (!Speech) {
-      notify(
-        "Seu navegador não oferece ditado por voz. Digite a descrição ou use uma foto.",
-        true,
-      );
-      return;
-    }
-    const r = new Speech();
-    r.lang = "pt-BR";
-    r.interimResults = false;
-    r.onresult = (e: any) =>
-      setText((t) => `${t} ${e.results[0][0].transcript}`.trim());
-    r.onend = () => setListening(false);
-    r.onerror = () => {
-      setListening(false);
-      notify(
-        "Não foi possível ouvir. Verifique a permissão do microfone.",
-        true,
-      );
-    };
-    recognition.current = r;
-    r.start();
-    setListening(true);
-  };
-  return (
-    <Modal title="Da descrição ao produto" onClose={onClose}>
-      <form
-        className="form-stack"
-        onSubmit={async (e) => {
-          e.preventDefault();
-          setBusy(true);
-          setError("");
-          try {
-            const r = await api(
-              "ai",
-              request("POST", { task: "extract_product", text, image }),
-            );
-            onDraft(r.product);
-            notify(
-              "Rascunho extraído. Revise o preço e a quantidade antes de salvar.",
-            );
-          } catch (e) {
-            setError((e as Error).message);
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        <div className="assistant-intro">
-          <Sparkles size={25} />
-          <p>
-            Descreva o produto ou envie uma foto da etiqueta. Você revisa os
-            dados antes de publicar.
-          </p>
-        </div>
-        {d.integrations.ai === "local" && (
-          <div className="demo-notice">
-            Configure n8n ou Workers AI para ativar a extração. O cadastro
-            manual está disponível em Novo produto.
-          </div>
-        )}
-        <Field label="Descrição do produto">
-          <textarea
-            maxLength={6000}
-            rows={4}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Tenho 10 calculadoras científicas, por R$ 45 cada. Modelo com 240 funções."
-          />
-        </Field>
-        <div className="assistant-inputs">
-          <label className="upload-area">
-            <ImagePlus size={24} />
-            <strong>{fileName || "Adicionar foto da etiqueta"}</strong>
-            <small>JPEG, PNG ou WebP · até 4 MB</small>
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              onChange={async (e) => {
-                const f = e.target.files?.[0];
-                if (!f) return;
-                if (f.size > 4_000_000) {
-                  setError("A imagem deve ter até 4 MB.");
-                  return;
-                }
-                const reader = new FileReader();
-                reader.onload = () => {
-                  setImage({
-                    mimeType: f.type,
-                    dataBase64: String(reader.result).split(",")[1],
-                  });
-                  setFileName(f.name);
-                  setError("");
-                };
-                reader.readAsDataURL(f);
-              }}
-            />
-          </label>
-          <button
-            type="button"
-            className={`voice-input ${listening ? "listening" : ""}`}
-            onClick={() => (listening ? recognition.current?.stop() : listen())}
-          >
-            <Mic size={24} />
-            <strong>{listening ? "Ouvindo…" : "Ditar descrição"}</strong>
-            <small>Use seu microfone</small>
-          </button>
-        </div>
-        {image && (
-          <button
-            type="button"
-            className="text-btn"
-            onClick={() => {
-              setImage(null);
-              setFileName("");
-            }}
-          >
-            <X size={14} />
-            Remover foto
-          </button>
-        )}
-        {error && (
-          <div className="error-box" role="alert">
-            {error}
-          </div>
-        )}
-        <button
-          className="btn primary full"
-          disabled={
-            busy || (!text.trim() && !image) || d.integrations.ai === "local"
-          }
-        >
-          {busy ? (
-            <Spinner />
-          ) : (
-            <>
-              <Sparkles size={17} />
-              Extrair e revisar dados
-              <ArrowRight size={17} />
-            </>
-          )}
-        </button>
-        <p className="microcopy">
-          {image
-            ? "A imagem será enviada ao provedor de IA configurado. Evite dados pessoais."
-            : "O texto é enviado ao provedor de IA. O ditado depende do serviço do navegador."}
-        </p>
       </form>
     </Modal>
   );

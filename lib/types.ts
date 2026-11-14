@@ -1,3 +1,7 @@
+export type CatalogDraft = Pick<
+  Product,
+  "name" | "description" | "price" | "stock" | "category"
+> & { warnings: string[] };
 export type Product = {
   id: string;
   name: string;

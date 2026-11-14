@@ -1,0 +1,37 @@
+CREATE SCHEMA IF NOT EXISTS tray_balcao;
+REVOKE ALL ON SCHEMA tray_balcao FROM PUBLIC, anon, authenticated;
+SET search_path TO tray_balcao;
+  
+    CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS products (id TEXT PRIMARY KEY, name TEXT NOT NULL, sku TEXT UNIQUE NOT NULL, description TEXT NOT NULL DEFAULT '', price INTEGER NOT NULL CHECK(price>0), stock INTEGER NOT NULL CHECK(stock>=0), category TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, "createdAt" TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS conversations (id TEXT PRIMARY KEY, name TEXT NOT NULL, phone TEXT UNIQUE NOT NULL, source TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'open', unread INTEGER NOT NULL DEFAULT 0, "updatedAt" TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, "conversationId" TEXT NOT NULL REFERENCES conversations(id), direction TEXT NOT NULL, text TEXT NOT NULL, status TEXT NOT NULL, "externalId" TEXT UNIQUE, "createdAt" TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS orders (id TEXT PRIMARY KEY, number TEXT UNIQUE NOT NULL, "customerName" TEXT NOT NULL, "conversationId" TEXT REFERENCES conversations(id), token TEXT UNIQUE NOT NULL, status TEXT NOT NULL, items TEXT NOT NULL, subtotal BIGINT NOT NULL, "deliveryFee" INTEGER NOT NULL DEFAULT 0, total BIGINT NOT NULL, delivery TEXT NOT NULL DEFAULT 'pickup', address TEXT NOT NULL DEFAULT '', "createdAt" TEXT NOT NULL, "expiresAt" TEXT NOT NULL, "paidAt" TEXT, "idempotencyKey" TEXT UNIQUE NOT NULL, "requestHash" TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS reservations ("orderId" TEXT NOT NULL REFERENCES orders(id), "productId" TEXT NOT NULL REFERENCES products(id), quantity INTEGER NOT NULL CHECK(quantity>0), PRIMARY KEY("orderId","productId"));
+    CREATE TABLE IF NOT EXISTS audit (id TEXT PRIMARY KEY, action TEXT NOT NULL, detail TEXT NOT NULL, "createdAt" TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS sessions ("tokenHash" TEXT PRIMARY KEY, "expiresAt" TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS rate_limits (key TEXT PRIMARY KEY, count INTEGER NOT NULL, "expiresAt" BIGINT NOT NULL);
+    CREATE INDEX IF NOT EXISTS messages_conversation ON messages("conversationId","createdAt");
+    CREATE INDEX IF NOT EXISTS orders_status ON orders(status,"expiresAt");
+    CREATE INDEX IF NOT EXISTS reservations_product ON reservations("productId");
+    
+ALTER TABLE meta ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE meta FROM PUBLIC, anon, authenticated;
+ALTER TABLE products ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE products FROM PUBLIC, anon, authenticated;
+ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE conversations FROM PUBLIC, anon, authenticated;
+ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE messages FROM PUBLIC, anon, authenticated;
+ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE orders FROM PUBLIC, anon, authenticated;
+ALTER TABLE reservations ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE reservations FROM PUBLIC, anon, authenticated;
+ALTER TABLE audit ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE audit FROM PUBLIC, anon, authenticated;
+ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE sessions FROM PUBLIC, anon, authenticated;
+ALTER TABLE rate_limits ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE rate_limits FROM PUBLIC, anon, authenticated;
+INSERT INTO meta(key,value) VALUES ('settings','{"name": "Minha loja", "segment": "Comércio local", "address": "", "phone": "", "pickupMinutes": 30, "deliveryFee": 0, "deliveryEnabled": false, "welcome": "Olá! Como podemos ajudar?"}') ON CONFLICT DO NOTHING;
+RESET search_path;

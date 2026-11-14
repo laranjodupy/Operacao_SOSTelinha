@@ -27,7 +27,7 @@ O custo de n8n e do WhatsApp depende do provedor/instância escolhido; não foi 
    - Name: `x-ai-secret`.
    - Value: um segredo longo escolhido por você.
 3. Em variáveis do n8n, crie `CLOUDFLARE_ACCOUNT_ID`. Se sua edição não oferecer variáveis, substitua a expressão do Account ID na URL do nó HTTP pelo seu Account ID. Ele é identificador, não token secreto.
-4. No nó **Chamar Workers AI**, configure uma credencial HTTP Header Auth:
+4. Nos nós **Chamar Workers AI** e **Transcrever áudio**, associe a mesma credencial HTTP Header Auth:
    - Name: `Authorization`.
    - Value: `Bearer SEU_TOKEN_WORKERS_AI`.
 5. Para o modelo de visão Llama 3.2, pode ser necessário aceitar a licença no painel/fluxo oficial da Meta/Cloudflare antes do primeiro uso. Faça essa escolha na sua conta.
@@ -42,7 +42,7 @@ N8N_AI_SECRET=mesmo-segredo-da-credencial-do-webhook
 
 Não existem credenciais exportadas no JSON. Os nós precisam ser associados às credenciais da sua instância antes da primeira execução. O template foi validado estruturalmente e o contrato HTTP foi testado com respostas controladas; ele não foi executado em uma instância real de n8n nesta entrega. Versões do n8n podem exigir ajuste de parâmetros ao importar.
 
-A resposta precisa chegar em até 20 segundos. O nó HTTP do template tem timeout de 18 segundos. O catálogo enviado contém apenas produtos ativos com IDs, preços e disponibilidade; a mensagem ou imagem é enviada ao provedor selecionado. Configure retenção das execuções no n8n de acordo com os dados utilizados.
+O timeout padrão por chamada da aplicação é 45 segundos e pode ser configurado com `AI_TIMEOUT_MS` (de 5 a 120 segundos). Para n8n com transcrição e extração no mesmo fluxo, use `AI_TIMEOUT_MS=90000`. Os nós HTTP do template têm timeout de 40 segundos cada. Na tarefa de sugestão, o catálogo enviado contém apenas produtos ativos com IDs, preços e disponibilidade; na extração, o catálogo não precisa ser enviado; a mensagem ou imagem é enviada ao provedor selecionado. Configure retenção das execuções no n8n de acordo com os dados utilizados.
 
 ### Contrato enviado ao n8n
 
@@ -57,7 +57,7 @@ A resposta precisa chegar em até 20 segundos. O nó HTTP do template tem timeou
 }
 ```
 
-Para foto, `task` será `extract_product` e `input.image` terá `mimeType` e `dataBase64`. Não envie o prefixo `data:` dentro de `dataBase64`; o template monta a entrada do modelo.
+Para foto, `task` será `extract_product` e `input.image` terá `mimeType` e `dataBase64`. Para um arquivo de áudio, `input.audio` terá esses mesmos campos e `input.image` será nulo. Texto, imagem e arquivo de áudio podem originar vários produtos. Não envie o prefixo `data:` dentro de `dataBase64`; o template monta a entrada do modelo.
 
 ### Respostas aceitas
 
@@ -74,17 +74,17 @@ Extração de produto:
 
 ```json
 {
-  "product": {
+  "products": [{
     "name": "Caderno 10 Matérias",
     "description": "Capa dura, 160 folhas",
     "price": 2490,
     "stock": 8,
     "category": "Cadernos"
-  }
+  }]
 }
 ```
 
-`price` é em centavos. O modelo pode devolver zero quando não souber o preço; o formulário exige um preço positivo antes de salvar. SKU é preenchido pelo lojista. A resposta da IA nunca cadastra automaticamente um produto nem altera estoque.
+`price` é em centavos. O modelo pode devolver zero quando não souber o preço; o formulário exige um preço positivo antes de salvar. O formulário gera sugestões de SKU, que podem ser editadas pelo lojista. A resposta pode conter de 1 a 20 rascunhos, sempre revisados antes de cadastrar. A resposta da IA nunca cadastra automaticamente um produto nem altera estoque.
 
 ## Opção B — Workers AI direto
 
@@ -96,9 +96,10 @@ CLOUDFLARE_ACCOUNT_ID=seu-account-id
 CLOUDFLARE_API_TOKEN=seu-token-com-permissao-workers-ai
 CLOUDFLARE_MODEL=@cf/meta/llama-3.1-8b-instruct
 CLOUDFLARE_VISION_MODEL=@cf/meta/llama-3.2-11b-vision-instruct
+CLOUDFLARE_AUDIO_MODEL=@cf/openai/whisper-large-v3-turbo
 ```
 
-Reinicie o Next.js. O adaptador chama a API REST `accounts/{id}/ai/run/{model}` com Bearer token, somente do servidor. O modelo de texto sugere itens e extrai descrições. O modelo de visão recebe a imagem base64 como data URL e retorna o mesmo rascunho JSON.
+Reinicie o Next.js. O adaptador chama a API REST `accounts/{id}/ai/run/{model}` com Bearer token, somente do servidor. O modelo de texto sugere itens e extrai descrições/listas. Arquivos de áudio passam primeiro por Whisper para transcrição; em seguida, a transcrição passa pelo modelo de texto. O modelo de visão recebe a imagem base64 como data URL e retorna o mesmo rascunho JSON.
 
 A seleção dos modelos segue exemplos oficiais. Qualidade de OCR, quantidade, preço e disponibilidade precisam de teste com suas etiquetas reais. A extração de estoque não representa uma contagem confiável de itens numa prateleira; confirme o número manualmente. O contrato foi testado com fixtures, não com inferência real nesta entrega.
 
@@ -166,6 +167,7 @@ Não é necessário compartilhar senhas ou tokens no chat: preencha os segredos 
 - n8n, Respond to Webhook: https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.respondtowebhook/
 - Cloudflare, REST API: https://developers.cloudflare.com/workers-ai/get-started/rest-api/
 - Cloudflare, visão: https://developers.cloudflare.com/workers-ai/guides/tutorials/llama-vision-tutorial/
+- Cloudflare, transcrição: https://developers.cloudflare.com/workers-ai/models/whisper-large-v3-turbo/
 - Cloudflare, preços: https://developers.cloudflare.com/workers-ai/platform/pricing/
 - Evolution Foundation, implementação de envio: https://github.com/evolution-foundation/evolution-api/blob/main/src/api/controllers/sendMessage.controller.ts
 - Evolution Foundation, roteamento: https://github.com/evolution-foundation/evolution-api/blob/main/src/api/routes/sendMessage.router.ts

@@ -13,6 +13,7 @@ Todos os caminhos começam com `/api`. Respostas JSON e `Cache-Control: no-store
 | GET | `/dashboard` | Lojista | Produtos, conversas, pedidos, métricas e eventos |
 | GET | `/products` | Lojista | Catálogo com disponibilidade |
 | POST | `/products` | Lojista | Novo produto |
+| POST | `/products/batch` | Lojista + Idempotency-Key | `{ products: [...] }`, até 20 produtos; gravação atômica |
 | PATCH | `/products/{id}` | Lojista | Atualização completa dos campos editáveis |
 | PUT | `/settings` | Lojista | Dados da loja e opções de recebimento |
 | POST | `/demo/seed` | Lojista + modo demo | Carrega exemplos sem limpar o banco |
@@ -21,6 +22,7 @@ Todos os caminhos começam com `/api`. Respostas JSON e `Cache-Control: no-store
 | POST | `/conversations/{id}/messages` | Lojista | `{ text }`, exige `Idempotency-Key` |
 | POST | `/orders` | Lojista | Cria pedido e reserva; exige `Idempotency-Key` |
 | PATCH | `/orders/{id}` | Lojista | Transição permitida de status |
+| POST | `/ai/test` | Lojista | Teste real com texto fictício, sem cadastrar; pode consumir cota |
 | POST | `/ai` | Lojista | Sugestão ou extração, sem gravação automática |
 | POST | `/webhooks/whatsapp` | `x-webhook-secret` | Evento Evolution ou mensagem normalizada |
 | GET | `/checkout/{token}` | Token exclusivo | Dados públicos daquele pedido e da loja |
@@ -92,3 +94,7 @@ Erros retornam `{ "error": "mensagem legível" }`. Detalhes e corpos de provedor
 ## IA e WhatsApp
 
 Os contratos completos, headers e exemplos estão em `INTEGRACOES.md`. A entrada de IA é limitada a `suggest` e `extract_product`; não há uma rota genérica para a IA executar SQL, confirmar pagamentos ou enviar mensagens.
+
+## Extração v1.1
+
+`POST /ai` recebe `{ task: "extract_product", text, image, audio }`. Image e audio são opcionais e mutuamente exclusivos; cada mídia contém `{ mimeType, dataBase64 }` e aceita até 3 MB. A resposta inclui `products` (de 1 a 20 rascunhos), o primeiro item em `product` para compatibilidade e, quando houver áudio, `transcription`. Os campos do produto usam preço unitário em centavos e quantidade inteira. Avisos em `warnings` são exibidos durante a revisão. `extract_product` nunca grava o catálogo.

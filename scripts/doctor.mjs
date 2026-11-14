@@ -1,7 +1,9 @@
+import { integrationUrl } from "../lib/server/integration-config.ts";
 import { existsSync } from "node:fs";
 import { loadEnvFile } from "node:process";
 if (existsSync(".env.local")) loadEnvFile(".env.local");
 const checks = [
+  ["Banco remoto configurado na Vercel", !process.env.VERCEL || !!process.env.DATABASE_URL],
   ["Node.js >= 24", Number(process.versions.node.split(".")[0]) >= 24],
   [
     "Credenciais do administrador",
@@ -49,6 +51,18 @@ if (process.env.WHATSAPP_PROVIDER === "evolution")
       (process.env.WEBHOOK_SECRET || "").length >= 24,
     ],
   );
+if (process.env.AI_PROVIDER === "n8n" && process.env.N8N_AI_WEBHOOK_URL) {
+  try {
+    integrationUrl(process.env.N8N_AI_WEBHOOK_URL, "N8N_AI_WEBHOOK_URL");
+    checks.push(["URL de destino do n8n permitida", true]);
+  } catch (e) {
+    checks.push(["URL de destino do n8n permitida", false]);
+    console.error(e.message);
+  }
+}
+console.log(
+  `Provedor de IA selecionado: ${process.env.AI_PROVIDER || "local"}`,
+);
 for (const [label, ok] of checks)
   console.log(`${ok ? "OK" : "PENDENTE"} · ${label}`);
 console.log(

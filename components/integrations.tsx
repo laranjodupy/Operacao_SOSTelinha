@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 
 import {
   Activity,
@@ -9,9 +10,9 @@ import {
   Sparkles,
   Zap,
 } from "lucide-react";
-import { api } from "@/lib/client";
+import { api, request } from "@/lib/client";
 import { type Snapshot } from "@/lib/types";
-import { Badge } from "./shared";
+import { Badge, Spinner } from "./shared";
 
 import { time, date, tone, type Notice } from "./ui-types";
 
@@ -22,6 +23,8 @@ export function Integrations({
   data: Snapshot;
   notify: Notice;
 }) {
+  const [testing, setTesting] = useState(false),
+    [testError, setTestError] = useState("");
   const items = [
     {
       name: "WhatsApp",
@@ -106,6 +109,46 @@ export function Integrations({
           </p>
         </div>
       </div>
+      <section className="integration-test-strip">
+        <div>
+          <h2>Confira a conexão selecionada</h2>
+          <p>
+            Provedor:{" "}
+            {d.integrations.ai === "cloudflare"
+              ? "Cloudflare Workers AI"
+              : d.integrations.ai === "n8n"
+                ? "n8n"
+                : "local (sem IA)"}
+            . O teste usa texto fictício, não cadastra produtos e pode consumir
+            uma pequena parcela da cota de IA.
+          </p>
+        </div>
+        <button
+          className="btn primary"
+          disabled={testing || d.integrations.ai === "local"}
+          onClick={async () => {
+            setTesting(true);
+            setTestError("");
+            try {
+              await api("ai/test", request("POST"));
+              notify(
+                "Conexão e formato da resposta de IA confirmados. Nenhum produto foi cadastrado.",
+              );
+            } catch (e) {
+              setTestError((e as Error).message);
+            } finally {
+              setTesting(false);
+            }
+          }}
+        >
+          {testing ? <Spinner /> : <Sparkles size={16} />}Testar IA selecionada
+        </button>
+        {testError && (
+          <div className="error-box" role="alert">
+            {testError}
+          </div>
+        )}
+      </section>
       <div className="integrations-grid">
         {items.map((x) => (
           <section className="integration-card" key={x.name}>

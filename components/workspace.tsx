@@ -212,7 +212,7 @@ export function Workspace() {
             {data.integrations.demo
               ? "Ambiente de demonstração"
               : "Operação da loja"}
-            <small>v1.0</small>
+            <small>v1.1</small>
           </div>
         </div>
       </aside>

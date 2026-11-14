@@ -12,7 +12,7 @@ const nextConfig = {
       "./integrations/**/*",
     ],
   },
-  serverExternalPackages: ["node:sqlite"],
+  serverExternalPackages: ["pg"],
   images: { unoptimized: true },
   async headers() {
     return [

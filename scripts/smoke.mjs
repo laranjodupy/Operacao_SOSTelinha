@@ -67,6 +67,36 @@ const p = await call("products", "POST", {
   active: true,
 });
 assert.equal(p.r.status, 201);
+const batch = [
+  {
+    name: "Produto lote A",
+    sku: `BATCH-A-${Date.now()}`,
+    price: 1000,
+    stock: 5,
+    category: "QA",
+  },
+  {
+    name: "Produto lote B",
+    sku: `BATCH-B-${Date.now()}`,
+    price: 1500,
+    stock: 2,
+    category: "QA",
+  },
+];
+const batchKey = crypto.randomUUID();
+const createdBatch = await call(
+  "products/batch",
+  "POST",
+  { products: batch },
+  batchKey,
+);
+assert.equal(createdBatch.r.status, 201);
+assert.equal(createdBatch.data.count, 2);
+assert.equal(
+  (await call("products/batch", "POST", { products: batch }, batchKey)).data
+    .duplicate,
+  true,
+);
 const event = {
   phone: "5579999998888",
   name: "Cliente QA",

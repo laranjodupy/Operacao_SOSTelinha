@@ -17,7 +17,7 @@ O demo original reunia balcão e celular em uma única tela e guardava tudo em `
 | `components/customer-checkout.tsx` | Compra pública pelo token exclusivo do pedido |
 | `app/api/[...path]/route.ts` | Contratos HTTP, autenticação, limites de requisição e erros |
 | `lib/server/store.ts` | Regras de produtos, pedidos, reservas e indicadores |
-| `lib/server/db.ts` | Esquema SQLite, transações e auditoria |
+| `lib/server/db.ts` | Adaptadores PostgreSQL/SQLite, transações e auditoria |
 | `lib/server/auth.ts` | Sessões, comparação de credenciais, proteção de origem e rate limit |
 | `lib/server/integrations.ts` | Adaptadores de IA e WhatsApp |
 | `lib/types.ts` | Tipos compartilhados e formatação monetária |
@@ -67,7 +67,7 @@ Sessões de 12 horas com token aleatório; o banco guarda somente o hash do toke
 
 Rotas do lojista exigem sessão. Alterações pelo navegador validam a origem contra `APP_URL`. Webhooks não usam cookie: exigem `x-webhook-secret`, com segredo de pelo menos 24 caracteres. Há limites persistentes para login, IA, pagamento de teste e webhook. O login usa um bucket global para não confiar em headers de IP fornecidos por um proxy desconhecido; ataques podem bloquear novas tentativas temporariamente, portanto configure proteção de borda antes de expor uma operação real.
 
-As queries são parametrizadas. O corpo HTTP tem limite de 6 MB. Imagens aceitam JPEG, PNG ou WebP com limite de 4 MB no cliente e limite base64 no servidor. URLs de integrações são definidas no ambiente e precisam de HTTPS; localhost sem TLS depende de autorização explícita na configuração. Redirecionamentos não são seguidos e há timeout de 20 segundos.
+As queries são parametrizadas. O corpo HTTP tem limite de 4,4 MB. Imagens aceitam JPEG, PNG ou WebP com limite de 3 MB no cliente e limite base64 no servidor. URLs de integrações são definidas no ambiente e precisam de HTTPS; localhost sem TLS depende de autorização explícita na configuração. Redirecionamentos não são seguidos e há timeout de 20 segundos.
 
 O token de checkout funciona como uma capacidade de acesso: quem tem o link pode consultar e concluir aquele pedido de teste. Ele não permite consultar a lista de clientes ou de pedidos. Os links não devem ser publicados. A política de referrer evita enviar o token a sites de terceiros.
 
@@ -83,8 +83,16 @@ Conversas de exemplo não podem receber mensagens reais pelo adaptador. A captur
 
 ## Persistência e implantação
 
-SQLite nativo, WAL, foreign keys e timeout de lock. O esquema v1 é criado automaticamente. Recomendação desta entrega: um processo Node 24 e um disco persistente, com backup. Não execute múltiplas réplicas independentes com cópias do mesmo arquivo. O processo não deve ser executado em filesystem efêmero.
+Na edição 2.0, DATABASE_URL seleciona PostgreSQL no Supabase, com schema privado e migração SQL explícita. Transações usam a mesma conexão, AsyncLocalStorage e lock transacional compartilhado. Sem DATABASE_URL, SQLite nativo permanece disponível para desenvolvimento em disco persistente. Na Vercel DATABASE_URL é obrigatória. Consulte DEPLOY_VERCEL_SUPABASE.md.
 
 A aplicação foi verificada localmente; a imagem Docker e o provedor de hospedagem ainda precisam de uma execução no ambiente de destino. Alterações posteriores de esquema exigem migrações versionadas; não presuma que `CREATE TABLE IF NOT EXISTS` modifica uma tabela antiga.
 
 Uma evolução para mais lojas exige `tenant_id`, isolamento em todas as queries, gestão de acesso, políticas de retenção e banco compartilhado. Isso não foi introduzido silenciosamente no MVP de uma loja.
+
+## Extração e revisão em lote (v1.1)
+
+Texto/lista usa o modelo de texto; foto usa o modelo de visão; arquivo de áudio usa Whisper antes do modelo de texto. No n8n, o template tem ramificação para transcrição. A extração retorna até 20 rascunhos; nenhum deles é persistido automaticamente. Dados ausentes recebem aviso para revisão, sem inventar preço.
+
+O lojista seleciona os rascunhos, revisa preço em reais, estoque e SKU e confirma o cadastro. `POST /api/products/batch` valida o lote inteiro e o grava em uma transação. Conflito de SKU não deixa uma importação parcial. Uma chave de idempotência persiste o resultado para evitar duplicação ao repetir uma confirmação após falha de rede.
+
+Imagens e arquivos de áudio aceitam até 3 MB, um arquivo por extração. O envio usa base64; o limite HTTP do aplicativo foi reduzido para 4,4 MB para ficar abaixo do limite de payload de 4,5 MB documentado pela Vercel. A edição 2.0 já inclui persistência PostgreSQL remota para hospedagem serverless.

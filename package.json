@@ -1,6 +1,6 @@
 {
   "name": "tray-balcao",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "packageManager": "npm@11.9.0",
   "scripts": {
@@ -8,24 +8,31 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "test": "node --conditions=react-server --experimental-strip-types --test tests/*.test.ts",
     "doctor": "node scripts/doctor.mjs",
     "test:http": "node scripts/test-http.mjs",
     "backup": "node scripts/backup.mjs",
-    "test:workflow": "node scripts/validate-workflow.mjs"
+    "test:workflow": "node scripts/validate-workflow.mjs",
+    "check:ai": "node scripts/check-ai.mjs",
+    "db:check": "node --conditions=react-server --experimental-strip-types scripts/check-db.mjs",
+    "db:import-sqlite": "node --conditions=react-server scripts/import-sqlite.mjs"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.16.0",
     "next": "16.4.3",
+    "pg": "^8.23.1",
     "react": "^19",
     "react-dom": "^19",
+    "server-only": "^0.0.1",
     "tailwind-merge": "^3.3.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.16",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^24",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "postcss": "^8.5",
@@ -33,7 +40,7 @@
     "typescript": "5.7.3"
   },
   "engines": {
-    "node": ">=24.0.0"
+    "node": "24.x"
   },
   "type": "module"
 }
