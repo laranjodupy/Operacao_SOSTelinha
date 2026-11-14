@@ -1,3 +1,4 @@
+import { safeDiagnostic } from "@/lib/server/diagnostics";
 import { NextRequest, NextResponse } from "next/server";
 import { authenticated, cookieName, limit, login, logout, requireAuth, sameOrigin, webhookAuth, } from "@/lib/server/auth";
 import { createOrder, createProductBatch, orderByToken, payDemo, products, receive, saveProduct, saveSettings, seedDemo, settings, snapshot, transitionOrder, updateConversation, expireOrders, } from "@/lib/server/store";
@@ -177,7 +178,7 @@ async function handle(request: NextRequest, context: {
         if ((error as { code?: string })?.code === "23505" || (error instanceof Error &&
             error.message.includes("UNIQUE constraint failed: products.sku")))
             return json({ error: "Esse SKU já está em uso. Escolha outro código." }, 409);
-        console.error("[tray-balcao]", error instanceof Error ? error.name : "UnknownError");
+        console.error("[tray-balcao]", safeDiagnostic(error));
         return json({ error: "Não foi possível concluir a operação. Tente novamente." }, 500);
     }
 }

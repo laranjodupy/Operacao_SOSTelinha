@@ -83,3 +83,15 @@ O adaptador atual do WhatsApp recebe texto e ignora grupos, mensagens próprias 
 ## Limites desta entrega
 
 Testes locais não equivalem a um deploy validado nas suas contas. Você deve executar a migração e cadastrar seus próprios segredos. Transações de negócio usam um lock do PostgreSQL compartilhado entre instâncias da aplicação para preservar a consistência do estoque em uma loja; para volumes elevados, esse lock deverá ser refinado por recurso. Reservas expiradas são liberadas quando o aplicativo processa operações/leitura do painel, sem um cron externo. Não há gateway de pagamento real nem garantia de entrega de mensagens apenas pelo retorno 2xx da Evolution.
+
+## Diagnóstico de erro 500 no login (edição 2.0.1)
+
+O login consulta rate_limits e sessions no banco; uma falha de banco pode ocorrer antes de conferir a senha. A resposta pública é genérica para não expor credenciais. Nos logs do servidor, procure `[tray-balcao]` com `code` e `hint`. A classificação contém apenas valores fixos, sem erro bruto, URI ou parâmetros. Em Vercel, reproduza a falha e abra Logs do projeto/deploy correspondente.
+
+- 42P01/3F000: migração ausente ou aplicada em outro projeto.
+- 28P01/28000: autenticação PostgreSQL recusada.
+- SELF_SIGNED_CERT_IN_CHAIN/UNABLE_TO_VERIFY_LEAF_SIGNATURE: configure DATABASE_SSL_CA com a CA do projeto; não desative TLS.
+- ENOTFOUND/ENETUNREACH: confira host e URI do pooler.
+- DATABASE_UNCONFIGURED: DATABASE_URL ausente no ambiente do deploy.
+
+Para testar a partir do computador, cadastre as mesmas configurações em .env.local e execute `npm run db:check`. Isso confirma a conexão a partir desse computador, não a conectividade da Vercel. Não compartilhe o arquivo de ambiente. Após alterar variáveis na Vercel, gere novo deploy.
