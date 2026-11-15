@@ -1,4 +1,6 @@
 import "server-only";
+import { usesSupabase, supabaseRpc } from "./supabase.ts";
+
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import pg from "pg";
@@ -50,6 +52,7 @@ async function serial<T>(fn: () => Promise<T>): Promise<T> {
   try { return await fn(); } finally { release(); }
 }
 async function query(sql: string, args: unknown[]) {
+  if (usesSupabase()) throw new Error("Esta operação precisa usar uma RPC transacional no modo Supabase.");
   if (usePostgres()) {
     const connection = scope.getStore()?.client || getPool();
     const result = await connection.query(postgresSql(sql), args);
@@ -73,6 +76,7 @@ export function db() {
       async run(...args: unknown[]) { return { changes: (await query(sql, args)).changes }; },
     }; },
     async exec(sql: string) {
+      if (usesSupabase()) throw new Error("Use o SQL Editor para executar migrações no modo Supabase.");
       if (usePostgres()) throw new Error("Use a migração SQL para operações administrativas.");
       const execute = async () => { sqliteDb().exec(sql); };
       return scope.getStore() ? execute() : serial(execute);
@@ -80,6 +84,7 @@ export function db() {
   };
 }
 export async function transaction<T>(fn: () => T | Promise<T>): Promise<T> {
+  if (usesSupabase()) throw new Error("Transações Supabase devem usar RPC.");
   if (scope.getStore()) return fn();
   if (usePostgres()) {
     const client = await getPool().connect();
@@ -101,6 +106,7 @@ export async function transaction<T>(fn: () => T | Promise<T>): Promise<T> {
   });
 }
 export async function log(action: string, detail: string) {
+  if (usesSupabase()) { await supabaseRpc("audit",{action,detail:detail.slice(0,1500)}); return; }
   await db().prepare("INSERT INTO audit VALUES(?,?,?,?)").run(uid(), action, detail.slice(0,1500), now());
 }
 export async function closeDatabase() { await pool?.end(); pool = undefined; }

@@ -1,4 +1,6 @@
 import "server-only";
+import { usesSupabase, supabaseRpc } from "./supabase.ts";
+
 import { createHash } from "node:crypto";
 import { db, log, now, transaction, uid } from "./db.ts";
 import { products, receive } from "./store.ts";
@@ -16,13 +18,13 @@ async function external(url: string, init: RequestInit, label = "Integração", 
 export async function sendMessage(conversationId: string, input: unknown, key: string) {
     const b = record(input), content = text(b.text, "Mensagem", 4000);
     text(key, "Chave de envio", 120);
-    const c = (await db()
+    const c = usesSupabase() ? await supabaseRpc("conversationById",{id:conversationId}) : (await db()
         .prepare("SELECT * FROM conversations WHERE id=?")
         .get(conversationId)) as Row | undefined;
     if (!c)
         fail(404, "Conversa não encontrada.");
     const externalId = `out:${key}`, id = uid();
-    const existing = (await db()
+    const existing = usesSupabase() ? await supabaseRpc("messageByExternalId",{externalId}) : (await db()
         .prepare("SELECT * FROM messages WHERE externalId=?")
         .get(externalId)) as Row | undefined;
     if (existing) {
@@ -41,7 +43,10 @@ export async function sendMessage(conversationId: string, input: unknown, key: s
             !process.env.WHATSAPP_INSTANCE))
         fail(503, "Complete as variáveis de conexão do WhatsApp.");
     // The unique outbox record is committed before the remote call. Repeating a key never resends.
-    (await transaction(async () => {
+    if (usesSupabase()) {
+      const reserved = await supabaseRpc("reserveMessage", {id,conversationId,text:content,externalId});
+      if (reserved.duplicate) return reserved;
+    } else (await transaction(async () => {
         (await db()
             .prepare("INSERT INTO messages VALUES(?,?,?,?,?,?,?)")
             .run(id, conversationId, "out", content, "sending", externalId, now()));
@@ -52,7 +57,8 @@ export async function sendMessage(conversationId: string, input: unknown, key: s
     let status = "simulated";
     if (mode === "evolution") {
         if (c!.source === "demo") {
-            (await db().prepare("UPDATE messages SET status=? WHERE id=?").run("failed", id));
+            if (usesSupabase()) await supabaseRpc("markMessage",{id,status:"failed"});
+            else (await db().prepare("UPDATE messages SET status=? WHERE id=?").run("failed", id));
             fail(409, "Conversas fictícias não recebem mensagens reais. Use uma conversa recebida pelo webhook.");
         }
         try {
@@ -71,7 +77,8 @@ export async function sendMessage(conversationId: string, input: unknown, key: s
             status = "uncertain";
         }
     }
-    (await transaction(async () => {
+    if (usesSupabase()) await supabaseRpc("markMessage",{id,status});
+    else (await transaction(async () => {
         (await db().prepare("UPDATE messages SET status=? WHERE id=?").run(status, id));
         (await log(`whatsapp.${status}`, `Envio ${id} para ${c!.name}`));
     }));

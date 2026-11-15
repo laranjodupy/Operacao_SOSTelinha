@@ -3,10 +3,14 @@ loadEnvConfig(process.cwd());
 const { db, closeDatabase } = await import('../lib/server/db.ts');
 const { safeDiagnostic } = await import('../lib/server/diagnostics.ts');
 try {
+  const {usesSupabase,supabaseRpc}=await import('../lib/server/supabase.ts');
+  if (usesSupabase()) await supabaseRpc('check');
+  else {
   for (const table of ['meta','products','conversations','messages','orders','reservations','audit','sessions','rate_limits'])
     await db().prepare(`SELECT COUNT(*) AS n FROM ${table}`).get();
   const row = await db().prepare('SELECT value FROM meta WHERE key=?').get('settings');
   if (!row) throw new Error('Missing settings');
+  }
   console.log('OK: conexão e tabelas verificadas. Nenhum segredo exibido.');
 } catch (error) {
   const diagnostic = safeDiagnostic(error);

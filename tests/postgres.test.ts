@@ -8,6 +8,7 @@ import { saveProduct, createOrder, payDemo, products, snapshot, receive, createP
 import { limit, login } from '../lib/server/auth.ts';
 
 test('Postgres schema, SQL adapter, transactions, access isolation and business flow', async () => {
+  process.env.DATABASE_PROVIDER = 'postgres';
   const engine = new PGlite();
   await engine.exec('CREATE ROLE anon; CREATE ROLE authenticated;');
   await engine.exec(readFileSync(new URL('../supabase/migrations/001_initial.sql', import.meta.url), 'utf8'));

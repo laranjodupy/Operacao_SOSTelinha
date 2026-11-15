@@ -1,6 +1,12 @@
 import "server-only";
 // Only fixed classifications may be logged: never raw messages, SQL, URLs or parameters.
 const hints: Record<string,string> = {
+  SUPABASE_CONFIG: 'Configure SUPABASE_URL e SUPABASE_SECRET_KEY (ou SUPABASE_SERVICE_ROLE_KEY) no servidor.',
+  SUPABASE_AUTH: 'A chave de servidor do Supabase foi recusada. Confira a Secret key, o projeto e as permissões da RPC.',
+  SUPABASE_MIGRATION: 'Execute 001_initial.sql e 002_data_api.sql no SQL Editor e confira se a Data API está habilitada.',
+  SUPABASE_NETWORK: 'Não foi possível acessar a Data API HTTPS. Confira SUPABASE_URL e disponibilidade do projeto.',
+  SUPABASE_API: 'Falha na Data API. Confira migrações, permissões da RPC e disponibilidade do Supabase.',
+
   DATABASE_UNCONFIGURED: 'Cadastre DATABASE_URL no ambiente do deploy e faça novo deploy.',
   '28P01': 'Autenticação PostgreSQL recusada. Confira a senha do banco e o usuário da URI do pooler.',
   '28000': 'Autenticação PostgreSQL recusada. Confira o usuário e a configuração da conexão.',

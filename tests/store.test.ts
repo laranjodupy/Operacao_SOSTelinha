@@ -5,6 +5,8 @@ import { createOrder, createProductBatch, expireOrders, orderByToken, payDemo, p
 import { inbound, aiTask, sendMessage } from "../lib/server/integrations.ts";
 import { secureEqual, login, limit } from "../lib/server/auth.ts";
 import { integrationUrl } from "../lib/server/integration-config.ts";
+process.env.DATABASE_PROVIDER = "sqlite";
+delete process.env.DATABASE_URL;
 process.env.DATABASE_PATH = ":memory:";
 process.env.DEMO_MODE = "true";
 process.env.AI_PROVIDER = "local";

@@ -1,3 +1,7 @@
+# Atualização 2.1
+
+A conexão recomendada agora usa SUPABASE_URL + SUPABASE_SECRET_KEY em HTTPS. Operações nomeadas em public.tray_balcao_api preservam transações. Tabelas privadas permanecem no schema tray_balcao. PostgreSQL direto e SQLite são alternativas. Consulte DEPLOY_VERCEL_SUPABASE.md.
+
 # Arquitetura e decisões
 
 ## Por que este recorte

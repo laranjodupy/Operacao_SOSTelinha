@@ -1,4 +1,4 @@
-# Tray Balcão 2.0
+# Tray Balcão 2.1
 
 Aplicativo Next.js para catálogo assistido por IA, conversas de WhatsApp, pedidos, reserva de estoque e checkout de demonstração.
 
@@ -6,14 +6,14 @@ Aplicativo Next.js para catálogo assistido por IA, conversas de WhatsApp, pedid
 
 Siga [o guia completo](docs/DEPLOY_VERCEL_SUPABASE.md). Ele cobre criação do Supabase, migração SQL, variáveis privadas, deploy, configuração remota do n8n/Evolution e testes de aceitação.
 
-- Banco remoto: PostgreSQL do Supabase, com conexão privada no servidor via `pg`.
-- Migração: `supabase/migrations/001_initial.sql`.
+- Banco remoto: PostgreSQL do Supabase, acessado por Data API HTTPS com URL + Secret key no servidor.
+- Instalação SQL: `supabase/INSTALAR_SUPABASE.sql` (inclui migrações 001 e 002).
 - Variáveis: `.env.vercel.example`.
 - Dados existentes: importador opcional do SQLite, com modo de leitura e confirmação explícita.
 - Segurança: schema privado com RLS e permissões públicas revogadas, queries parametrizadas, sessões com tokens hash, CSRF e segredos de webhook.
 - Stack: Next.js 16.4.3, React 19, TypeScript, Tailwind, Node.js 24.
 
-Não coloque DATABASE_URL nem tokens de integração em variáveis NEXT_PUBLIC_. Este projeto não exige chave anon nem service_role do Supabase. O login continua sendo do administrador da aplicação.
+Configure SUPABASE_URL e SUPABASE_SECRET_KEY (ou SUPABASE_SERVICE_ROLE_KEY legada). Não use NEXT_PUBLIC_ para a chave e não use chave anon/publishable. O login continua sendo do administrador da aplicação.
 
 ## Desenvolvimento local
 
@@ -21,7 +21,7 @@ Não coloque DATABASE_URL nem tokens de integração em variáveis NEXT_PUBLIC_.
 2. Copie `.env.example` para `.env.local` e configure as credenciais do administrador.
 3. Execute `npm run dev` e abra localhost:3000.
 
-Sem DATABASE_URL, o banco SQLite local é criado automaticamente. Com DATABASE_URL, execute antes a migração no Supabase. Na Vercel, DATABASE_URL é obrigatória.
+Com as variáveis SUPABASE, execute antes a instalação SQL no projeto. DATABASE_URL permanece como alternativa avançada. Sem conexão remota, SQLite é somente para desenvolvimento local.
 
 ## Comandos
 

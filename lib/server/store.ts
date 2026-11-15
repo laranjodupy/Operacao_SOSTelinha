@@ -1,4 +1,6 @@
 import "server-only";
+import { usesSupabase, supabaseRpc } from "./supabase.ts";
+
 import { createHash, randomBytes } from "node:crypto";
 import { db, log, now, transaction, uid } from "./db.ts";
 import { fail, flag, integer, phone, record, text } from "./validation.ts";
@@ -6,6 +8,7 @@ import type { Audit, Conversation, Message, Order, OrderItem, OrderStatus, Produ
 type Row = Record<string, any>;
 const orderRow = (r: Row): Order => ({ ...r, items: JSON.parse(r.items) }) as Order;
 export async function settings(): Promise<Settings> {
+    if (usesSupabase()) return supabaseRpc("settings");
     return JSON.parse(((await db().prepare("SELECT value FROM meta WHERE key=?").get("settings")) as Row)
         .value);
 }
@@ -21,6 +24,7 @@ export async function saveSettings(input: unknown) {
         deliveryEnabled: flag(b.deliveryEnabled, "Entrega"),
         welcome: text(b.welcome, "Saudação", 600),
     };
+    if (usesSupabase()) return supabaseRpc("saveSettings", {settings:s});
     (await transaction(async () => {
         (await db()
             .prepare("UPDATE meta SET value=? WHERE key=?")
@@ -30,6 +34,7 @@ export async function saveSettings(input: unknown) {
     return s;
 }
 export async function expireOrders() {
+    if (usesSupabase()) { await supabaseRpc("expire"); return; }
     (await transaction(async () => {
         const expired = (await db()
             .prepare("SELECT id,number FROM orders WHERE status='pending' AND expiresAt<=?")
@@ -42,6 +47,7 @@ export async function expireOrders() {
     }));
 }
 export async function products(): Promise<Product[]> {
+    if (usesSupabase()) return supabaseRpc("products");
     return ((await db()
         .prepare("SELECT p.*, COALESCE((SELECT SUM(quantity) FROM reservations r WHERE r.productId=p.id),0) AS reserved FROM products p ORDER BY createdAt DESC, name")
         .all()) as Row[]).map((r) => ({
@@ -85,6 +91,7 @@ async function writeProduct(p: ReturnType<typeof productInput>, id?: string) {
 }
 export async function saveProduct(input: unknown, id?: string) {
     const p = productInput(input, id);
+    if (usesSupabase()) return supabaseRpc<Product>("saveProduct", {product:p,editId:id??null});
     (await expireOrders());
     (await transaction(async () => (await writeProduct(p, id))));
     return (await products()).find((x) => x.id === p.id)!;
@@ -102,6 +109,7 @@ export async function createProductBatch(input: unknown, key: string) {
     const hash = createHash("sha256")
         .update(JSON.stringify(rows.map(({ id, ...p }) => p)))
         .digest("hex");
+    if (usesSupabase()) return supabaseRpc("batch", {products:rows,key,hash});
     (await expireOrders());
     return (await transaction(async () => {
         const metaKey = `catalog_batch:${key}`, existing = (await db()
@@ -124,6 +132,7 @@ export async function createProductBatch(input: unknown, key: string) {
     }));
 }
 export async function conversations(): Promise<Conversation[]> {
+    if (usesSupabase()) return supabaseRpc("conversations");
     return await Promise.all(((await db()
         .prepare("SELECT * FROM conversations ORDER BY updatedAt DESC")
         .all()) as Row[]).map(async (c) => ({
@@ -135,6 +144,7 @@ export async function conversations(): Promise<Conversation[]> {
 }
 export async function receive(input: unknown, source = "demo") {
     const b = record(input), number = phone(b.phone), name = text(b.name || "Cliente", "Nome", 100), content = text(b.text, "Mensagem", 4000), externalId = text(b.externalId, "Identificador do evento", 200);
+    if (usesSupabase()) return supabaseRpc("receive", {phone:number,name,text:content,externalId:`${source}:${externalId}`,source});
     return (await transaction(async () => {
         const duplicate = (await db()
             .prepare("SELECT conversationId FROM messages WHERE externalId=?")
@@ -164,18 +174,21 @@ export async function updateConversation(id: string, input: unknown) {
     const b = record(input);
     if (!["open", "closed"].includes(String(b.status)))
         fail(400, "Status de conversa inválido.");
+    if (usesSupabase()) { await supabaseRpc("updateConversation", {id,status:b.status}); return; }
     if (!(await db()
         .prepare("UPDATE conversations SET unread=0,status=? WHERE id=?")
         .run(String(b.status), id)).changes)
         fail(404, "Conversa não encontrada.");
 }
 export async function orderById(id: string) {
+    if (usesSupabase()) return supabaseRpc<Order>("orderById", {id});
     const row = (await db().prepare("SELECT * FROM orders WHERE id=?").get(id)) as Row | undefined;
     if (!row)
         fail(404, "Pedido não encontrado.");
     return orderRow(row!);
 }
 export async function orderByToken(token: string) {
+    if (usesSupabase()) return supabaseRpc<Order>("orderByToken", {token});
     const row = (await db().prepare("SELECT * FROM orders WHERE token=?").get(token)) as Row | undefined;
     if (!row)
         fail(404, "Link de compra não encontrado.");
@@ -203,6 +216,7 @@ export async function createOrder(input: unknown, key: string) {
     const hash = createHash("sha256")
         .update(JSON.stringify({ customerName, conversationId, itemsInput }))
         .digest("hex");
+    if (usesSupabase()) return supabaseRpc<Order>("createOrder", {customerName,conversationId,items:itemsInput,key,hash,id:uid(),token:randomBytes(24).toString("hex")});
     (await expireOrders());
     return (await transaction(async () => {
         const existing = (await db()
@@ -264,6 +278,7 @@ export async function payDemo(token: string, input: unknown) {
     if (b.delivery !== "pickup" && b.delivery !== "local")
         fail(400, "Escolha retirada ou entrega local.");
     const address = b.delivery === "local" ? text(b.address, "Endereço de entrega", 400) : "";
+    if (usesSupabase()) return supabaseRpc<Order>("payDemo", {token,delivery:b.delivery,address});
     (await expireOrders());
     return (await transaction(async () => {
         const o = (await orderByToken(token));
@@ -292,6 +307,7 @@ export async function payDemo(token: string, input: unknown) {
 }
 export async function transitionOrder(id: string, input: unknown) {
     const b = record(input);
+    if (usesSupabase()) return supabaseRpc<Order>("transition", {id,status:String(b.status)});
     (await expireOrders());
     return (await transaction(async () => {
         const o = (await orderById(id)), status = String(b.status) as OrderStatus;
@@ -316,6 +332,63 @@ export async function transitionOrder(id: string, input: unknown) {
 export async function seedDemo() {
     if (process.env.DEMO_MODE === "false")
         fail(403, "Modo de demonstração desativado.");
+    if (usesSupabase()) {
+        const samples = [
+            [
+                "Mochila Escolar Preta",
+                "MOC-001",
+                "Alças acolchoadas · compartimento para notebook",
+                8990,
+                4,
+                "Mochilas",
+            ],
+            [
+                "Caderno 10 Matérias",
+                "CAD-010",
+                "Capa dura · 160 folhas",
+                2490,
+                8,
+                "Cadernos",
+            ],
+            [
+                "Kit Canetas Gel",
+                "CAN-006",
+                "6 cores · escrita macia",
+                1990,
+                12,
+                "Escrita",
+            ],
+            [
+                "Calculadora Científica",
+                "CAL-001",
+                "240 funções · capa protetora",
+                4500,
+                10,
+                "Acessórios",
+            ],
+            [
+                "Estojo Duplo",
+                "EST-002",
+                "Dois compartimentos · azul marinho",
+                1690,
+                3,
+                "Acessórios",
+            ],
+            [
+                "Lápis de Cor 24 Cores",
+                "LAP-024",
+                "Cores vivas · caixa com 24 unidades",
+                3290,
+                6,
+                "Escrita",
+            ],
+        ];
+        const rows=samples.map(([name,sku,description,price,stock,category]) => productInput({name,sku,description,price,stock,category}));
+        return supabaseRpc("seed", {products:rows,conversations:[
+          {name:"Mariana Costa",phone:"5579999990001",text:"Vocês têm mochila e canetas?",externalId:"demo:seed-mariana",source:"demo"},
+          {name:"João Pedro",phone:"5579999990002",text:"Preciso de dois cadernos.",externalId:"demo:seed-joao",source:"demo"}
+        ]});
+    }
     if ((await db().prepare("SELECT value FROM meta WHERE key=?").get("demoSeeded")))
         return { seeded: false };
     // Seeding is additive and never resets real records.
@@ -392,18 +465,19 @@ export async function seedDemo() {
     return { seeded: true };
 }
 export async function snapshot(): Promise<Snapshot> {
-    (await expireOrders());
-    const catalog = (await products()), orders = ((await db()
+    const remote = usesSupabase() ? await supabaseRpc("snapshot") : null;
+    if (!remote) await expireOrders();
+    const catalog: Product[] = remote ? remote.products : (await products()), orders: Order[] = remote ? remote.orders : ((await db()
         .prepare("SELECT * FROM orders ORDER BY createdAt DESC")
         .all()) as Row[]).map(orderRow);
     const day = (date: string) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date(date));
     const today = day(now()), paid = orders.filter((o) => o.paidAt && day(o.paidAt) === today), pending = orders.filter((o) => o.status === "pending");
     return {
         products: catalog,
-        conversations: (await conversations()),
+        conversations: remote ? remote.conversations : (await conversations()),
         orders,
-        settings: (await settings()),
-        audit: (await db()
+        settings: remote ? remote.settings : (await settings()),
+        audit: remote ? remote.audit : (await db()
             .prepare("SELECT * FROM audit ORDER BY createdAt DESC,rowid DESC LIMIT 80")
             .all()) as Audit[],
         integrations: {

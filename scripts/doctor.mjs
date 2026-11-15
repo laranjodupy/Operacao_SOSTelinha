@@ -2,8 +2,10 @@ import { integrationUrl } from "../lib/server/integration-config.ts";
 import { existsSync } from "node:fs";
 import { loadEnvFile } from "node:process";
 if (existsSync(".env.local")) loadEnvFile(".env.local");
+const supabase = process.env.DATABASE_PROVIDER === 'supabase' || (process.env.DATABASE_PROVIDER !== 'postgres' && process.env.DATABASE_PROVIDER !== 'sqlite' && !!(process.env.SUPABASE_URL || process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY));
 const checks = [
-  ["Banco remoto configurado na Vercel", !process.env.VERCEL || !!process.env.DATABASE_URL],
+  ['Supabase URL e chave configuradas', !supabase || !!(process.env.SUPABASE_URL && (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY))],
+  ["Banco remoto configurado na Vercel", !process.env.VERCEL || !!process.env.DATABASE_URL || supabase],
   ["Node.js >= 24", Number(process.versions.node.split(".")[0]) >= 24],
   [
     "Credenciais do administrador",

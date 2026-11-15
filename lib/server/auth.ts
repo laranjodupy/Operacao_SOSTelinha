@@ -1,4 +1,6 @@
 import "server-only";
+import { usesSupabase, supabaseRpc } from "./supabase.ts";
+
 import { createHash, randomBytes, scryptSync, timingSafeEqual, } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { db, transaction } from "./db.ts";
@@ -11,6 +13,7 @@ export function secureEqual(a: string, b: string) {
     return timingSafeEqual(aa, bb);
 }
 export async function limit(key: string, max: number, windowMs: number) {
+  if (usesSupabase()) { const result = await supabaseRpc("limit",{key,windowMs}); if (result.count>max) fail(429,"Muitas tentativas. Aguarde alguns minutos."); return; }
   const count = await transaction(async () => {
     const now = Date.now();
     (await db().prepare("DELETE FROM rate_limits WHERE expiresAt<?").run(now));
@@ -46,6 +49,7 @@ export async function login(email: unknown, password: unknown) {
         !valid)
         fail(401, "E-mail ou senha incorretos.");
     const token = randomBytes(32).toString("hex"), expiresAt = new Date(Date.now() + 12 * 60 * 60000).toISOString();
+    if (usesSupabase()) { await supabaseRpc("sessionCreate", {tokenHash:digest(token),expiresAt}); return {token,expiresAt}; }
     (await db()
         .prepare("DELETE FROM sessions WHERE expiresAt<?")
         .run(new Date().toISOString()));
@@ -58,6 +62,7 @@ export async function authenticated(request: NextRequest) {
     const token = request.cookies.get(cookieName)?.value;
     if (!token)
         return false;
+    if (usesSupabase()) return supabaseRpc<boolean>("sessionFind", {tokenHash:digest(token)});
     return !!(await db()
         .prepare("SELECT tokenHash FROM sessions WHERE tokenHash=? AND expiresAt>?")
         .get(digest(token), new Date().toISOString()));
@@ -68,6 +73,7 @@ export async function requireAuth(request: NextRequest) {
 }
 export async function logout(request: NextRequest) {
     const token = request.cookies.get(cookieName)?.value;
+    if (token && usesSupabase()) { await supabaseRpc("sessionDelete",{tokenHash:digest(token)}); return; }
     if (token)
         (await db().prepare("DELETE FROM sessions WHERE tokenHash=?").run(digest(token)));
 }

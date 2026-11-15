@@ -1,97 +1,100 @@
-# Deploy do Tray Balcão na Vercel com Supabase
+# Tray Balcão 2.1: Vercel e Supabase com URL + chave
 
-Esta edição 2.0 usa PostgreSQL do Supabase quando DATABASE_URL está configurada; sem ela, mantém SQLite para desenvolvimento. Na Vercel, a ausência da conexão gera erro em vez de criar um banco temporário. Não há cópia automática dos dados locais. O login continua sendo o administrador da aplicação com sessões no banco; não é Supabase Auth. O checkout continua sendo uma demonstração, sem cobrança financeira real.
+A conexão recomendada agora usa a Data API HTTPS do Supabase. Você configura a URL do projeto e uma chave de servidor. Não precisa montar URI PostgreSQL, codificar senha do banco ou cadastrar certificado CA neste modo. A conexão PostgreSQL antiga continua opcional para uso avançado.
 
-## 1. Crie e prepare o Supabase
+## 1. Prepare o banco
 
-1. Crie um projeto separado para o produto e guarde a senha do banco.
-2. Abra SQL Editor. Execute `supabase/migrations/001_initial.sql` uma única vez no projeto escolhido. Ela cria o schema privado `tray_balcao` e não remove tabelas existentes. O catálogo começa vazio.
-3. Clique em Connect e selecione a conexão PostgreSQL **Transaction pooler**. Copie a URI exibida (normalmente porta 6543). Use essa URI como DATABASE_URL. Troque o marcador da senha; caracteres especiais na senha devem ser codificados para URL. Não copie essa URI para o navegador, chats ou Git.
-4. Esta integração usa `pg` no servidor, sem prepared statements nomeados; não requer anon key, publishable key nem service_role key. Não é necessário expor o schema tray_balcao na Data API.
-5. TLS valida o certificado. Se houver erro de CA, obtenha o certificado CA do projeto nas configurações SSL do Supabase e configure DATABASE_SSL_CA (PEM, com quebras de linha reais ou `\n`). Não desligue a validação TLS em produção.
+No seu projeto Supabase, abra SQL Editor e execute o arquivo inteiro `supabase/INSTALAR_SUPABASE.sql`. Ele reúne as migrações 001 e 002. Cria as tabelas quando ausentes e atualiza a função de acesso, sem apagar os registros existentes. Pode usar o mesmo projeto Supabase da versão anterior. Alternativamente, execute os arquivos em supabase/migrations na ordem 001 e 002.
 
-A migração revoga acesso de PUBLIC/anon/authenticated e habilita RLS sem políticas públicas. A conexão fornecida pelo painel tem privilégios elevados: mantenha-a exclusivamente nas variáveis do servidor. Não adicione políticas públicas para contornar erros de configuração.
+A função `public.tray_balcao_api` possui operações fixas. Ela não aceita SQL arbitrário. Apenas service_role pode executá-la. Os papéis anon e authenticated não podem chamá-la. As tabelas permanecem no schema privado tray_balcao, com RLS habilitada e sem acesso público. Não exponha esse schema na Data API e não adicione políticas públicas.
 
-## 2. Suba este código para seu repositório
+A Data API precisa estar habilitada, com o schema public exposto (configuração padrão). O navegador continua chamando as rotas autenticadas do Next.js; ele não chama diretamente a função privilegiada do Supabase.
 
-Use o conteúdo desta versão como raiz do projeto. Não inclua node_modules, .next, data, backups, arquivos SQLite ou .env.local. O .gitignore já exclui esses caminhos. Os arquivos .env.example e .env.vercel.example contêm somente exemplos.
+## 2. Copie as duas configurações do painel
 
-No computador, Node 24 e `npm ci`. Configure .env.local e execute `npm run db:check` para conferir conexão e migração. O comando só faz uma leitura e não imprime credenciais.
+- **SUPABASE_URL:** URL HTTPS do projeto, encontrada em Connect ou nas configurações de API/Data API. Copie a origem, como `https://REFERENCIA-REAL.supabase.co`. Não use o endereço do dashboard, a URI postgresql ou o domínio da Vercel.
+- **SUPABASE_SECRET_KEY:** em Settings > API Keys, obtenha/crie uma Secret key, normalmente iniciada por `sb_secret_`. Ela serve para backend. Não use Publishable key.
+- Se o projeto usar as chaves antigas, use a chave `service_role` em **SUPABASE_SERVICE_ROLE_KEY**, deixando SUPABASE_SECRET_KEY ausente. A chave anon não possui permissão para esta integração.
 
-## 3. Configure a Vercel
+Nunca envie a chave pelo chat nem coloque no código ou em NEXT_PUBLIC_. Ela permite acesso privilegiado aos dados do projeto. Use um projeto dedicado e cadastre a chave como variável secreta do servidor.
 
-Importe o repositório, selecione Next.js, raiz do projeto e Node.js 24.x. Use build `npm run build`; deixe os demais padrões do Next.js. Não rode scripts de migração durante o build.
+## 3. Cadastre na Vercel
 
-Em Settings > Environment Variables, cadastre os valores abaixo para Production. Para Preview, use um projeto Supabase e integrações separados: uma URL Preview não deve escrever no banco de produção. Alterações nas variáveis exigem novo deploy.
+Em Settings > Environment Variables, no ambiente do deploy:
 
-| Variável | Valor |
+```dotenv
+SUPABASE_URL=https://URL-REAL-DO-PROJETO.supabase.co
+SUPABASE_SECRET_KEY=COLE_A_SECRET_KEY_REAL
+APP_URL=https://DOMINIO-REAL-DO-APLICATIVO
+ADMIN_EMAIL=SEU_EMAIL
+ADMIN_PASSWORD=SUA_SENHA_FORTE
+```
+
+Esses exemplos não são credenciais prontas. O ADMIN_PASSWORD é a senha de login no Tray Balcão e é diferente das chaves do Supabase. ADMIN_PASSWORD_HASH é opcional; só preencha com o hash gerado pelo script, caso prefira esse formato. Se houver um hash preenchido, ele tem preferência sobre ADMIN_PASSWORD.
+
+No modo novo, pode remover DATABASE_URL, DATABASE_SSL e DATABASE_SSL_CA das variáveis da Vercel. Se existir DATABASE_PROVIDER de um teste anterior, remova-a ou defina `supabase`. Quando as configurações SUPABASE estão presentes, a seleção automática dá preferência à Data API. Sem elas, DATABASE_URL ainda seleciona PostgreSQL direto. Sem nenhuma configuração remota, SQLite serve apenas para desenvolvimento local. Não haverá fallback silencioso para SQLite se a configuração Supabase estiver incompleta ou falhar.
+
+Mantenha as variáveis das integrações de IA/WhatsApp e DEMO_MODE conforme `.env.vercel.example`. A configuração do banco foi simplificada; n8n e Evolution continuam sendo serviços independentes.
+
+Importe o repositório na Vercel como Next.js, Node.js 24.x, build `npm run build`. Após alterar variáveis, faça novo deploy. Para Preview, use banco e integrações de teste separados dos de produção.
+
+## 4. Uso local
+
+Copie .env.example para .env.local. Preencha SUPABASE_URL e a chave de servidor, além do login. Execute:
+
+```powershell
+npm ci
+npm run db:check
+npm run dev
+```
+
+O db:check testa conectividade e existência das tabelas pela mesma RPC, sem cadastrar produtos e sem imprimir segredos. Configurar o banco localmente não configura as variáveis na Vercel. Não envie .env.local para o Git.
+
+## 5. Como conferir
+
+1. /api/health confirma apenas o servidor HTTP.
+2. Entre com ADMIN_EMAIL e ADMIN_PASSWORD e abra o painel.
+3. Cadastre um produto, recarregue e confira a persistência no mesmo projeto Supabase.
+4. Teste IA e WhatsApp. As chamadas dependem das configurações desses provedores.
+5. Crie um pedido e confirme a reserva. O pagamento é simulado quando DEMO_MODE=true.
+
+As operações de estoque, pedidos, sessões, rate limit e mensagens são operações nomeadas em função SQL. Cada chamada executa em uma transação, com lock transacional compartilhado para preservar a consistência entre instâncias. O envio externo de WhatsApp acontece depois da gravação da saída pendente, para evitar reenvios por repetição da chave.
+
+## 6. Endereços de local para remoto
+
+| Configuração | Produção |
 | --- | --- |
-| DATABASE_URL | URI do Transaction pooler do Supabase |
-| DATABASE_SSL | true |
-| DATABASE_SSL_CA | Opcional, CA do Supabase se necessária |
-| APP_URL | Origem exata do domínio estável, como https://seu-projeto.vercel.app, sem caminho |
-| ADMIN_EMAIL | Seu e-mail de administrador |
-| ADMIN_PASSWORD_HASH | Hash gerado pelo script descrito abaixo |
-| DEMO_MODE | true para apresentação com pagamento fictício; false desabilita pagamento simulado e carga de exemplos |
-| AI_PROVIDER | n8n, cloudflare ou local |
-| AI_TIMEOUT_MS | 90000 para o fluxo n8n |
-| N8N_AI_WEBHOOK_URL | URL HTTPS de produção do workflow publicado, se AI_PROVIDER=n8n |
-| N8N_AI_SECRET | Mesmo segredo do x-ai-secret do webhook n8n |
-| WHATSAPP_PROVIDER | evolution para WhatsApp conectado; demo para ensaio |
-| WHATSAPP_BASE_URL | Origem HTTPS pública da Evolution, sem /manager |
-| WHATSAPP_INSTANCE | Nome da instância conectada |
-| WHATSAPP_API_KEY | Chave da Evolution autorizada para essa instância |
-| WEBHOOK_SECRET | Segredo aleatório com pelo menos 24 caracteres |
+| APP_URL | Origem HTTPS estável do aplicativo na Vercel |
+| WHATSAPP_BASE_URL | Origem HTTPS acessível da Evolution, sem /manager |
+| Webhook da Evolution | https://SEU-DOMINIO/api/webhooks/whatsapp com x-webhook-secret |
+| N8N_AI_WEBHOOK_URL | URL HTTPS de produção do workflow publicado |
 | ALLOW_INSECURE_LOCAL_INTEGRATIONS | false |
 
-Todas essas variáveis são de servidor: nenhuma usa NEXT_PUBLIC_. Não coloque segredos no next.config, código fonte, screenshots ou retorno das rotas. Não cadastre DATABASE_PATH para produção. Para IA direta, configure CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN e os modelos conforme .env.example; os campos N8N não são usados nesse modo.
+localhost:8080 e host.docker.internal não são destinos para chamadas da Vercel. Hospede Evolution/n8n em ambiente apropriado a processos persistentes ou use túnel de teste com o computador ligado. O deploy Next.js não instala esses serviços.
 
-Para gerar ADMIN_PASSWORD_HASH no PowerShell, use `node scripts/hash-password.mjs` e digite a senha no terminal quando solicitado. Não gere um hash de uma senha de exemplo. O formato é salt:hash. ADMIN_PASSWORD continua suportada, mas prefira cadastrar somente o hash em produção.
+## 7. Dados anteriores
 
-Depois do primeiro deploy, confira o domínio atribuído, ajuste APP_URL se necessário e faça outro deploy. APP_URL deve coincidir com o domínio em que você faz login; não é o endereço do Supabase, Evolution ou n8n.
+Se já usava o mesmo Supabase, aplicar a migração mantém os dados nas tabelas existentes. Não é necessário copiar dados para mudar o transporte de PostgreSQL para HTTPS.
 
-## 4. O que muda de local para remoto
+Para trazer um SQLite local, execute `npm run db:import-sqlite -- CAMINHO_DO_ARQUIVO`. Sem --confirm, o comando apenas conta os registros. Para importar, use --confirm com destino vazio. No modo Data API, a importação ocorre em uma única RPC atômica, com limite de 5 MB de payload no script. Não copia sessões nem limites de requisição. Para volumes maiores, use o modo PostgreSQL direto do guia avançado.
 
-| Serviço | Local | Produção |
-| --- | --- | --- |
-| Aplicativo | localhost:3000 | Domínio HTTPS na Vercel |
-| Banco | Arquivo SQLite | PostgreSQL persistente no Supabase |
-| Evolution | localhost:8080 | Serviço acessível por HTTPS, em servidor próprio ou túnel de teste |
-| n8n | localhost:5678, se local | URL HTTPS acessível pela Vercel |
-| Destino do webhook Evolution | host.docker.internal/local | https://SEU-DOMINIO/api/webhooks/whatsapp |
-| APP_URL | http://localhost:3000 | Origem HTTPS estável da Vercel |
+## 8. Diagnóstico seguro
 
-Evolution e n8n não estão incluídos no deploy do Next.js. Mantenha-os rodando em um ambiente adequado a processos persistentes. Um túnel de teste para seu computador exige que computador, Docker e túnel permaneçam ligados; não é uma implantação permanente. Não exponha os bancos Redis/Postgres internos da Evolution ao público.
+Procure `[tray-balcao]` nos Logs de execução da Vercel, depois de reproduzir o erro. O navegador recebe uma resposta genérica para não expor detalhes do banco.
 
-Na Evolution, substitua a URL de callback pelo domínio da aplicação, mantenha apenas MESSAGES_UPSERT e configure o cabeçalho x-webhook-secret pela API com o mesmo WEBHOOK_SECRET. Mantenha webhook by events desativado. O segredo do callback é diferente da API key da Evolution. Se houver proteção de deploy da Vercel exigindo login da Vercel, o webhook será bloqueado antes de chegar ao aplicativo: configure o domínio de produção para permitir acesso externo às rotas públicas e mantenha a autenticação do aplicativo e do webhook. Não remova webhookAuth.
+| Código | Ação |
+| --- | --- |
+| SUPABASE_CONFIG | Conferir URL e chave de servidor |
+| SUPABASE_AUTH | Conferir se a Secret key/service_role é do mesmo projeto e se a função tem as permissões da migração |
+| SUPABASE_MIGRATION | Executar INSTALAR_SUPABASE.sql e conferir se a Data API está habilitada |
+| SUPABASE_NETWORK | Conferir URL HTTPS e disponibilidade do projeto |
+| 42P01 / 3F000 | Migração ou schema ausente |
+| SUPABASE_API | Conferir migrações, permissões e disponibilidade do serviço |
 
-## 5. Dados já existentes
+No modo Data API, os erros de CA da conexão PostgreSQL anterior não se aplicam. A chamada HTTPS mantém a validação TLS normal do Node.js.
 
-Por padrão, o Supabase começa vazio. Para levar catálogo, conversas, mensagens e pedidos do SQLite, faça backup do arquivo e interrompa as alterações durante a cópia. Execute `npm run db:import-sqlite -- CAMINHO_DO_ARQUIVO --confirm` com DATABASE_URL do destino em .env.local. O importador exige tabelas de negócio vazias, roda em uma transação e não migra sessões nem limites de requisição. Sem --confirm, exibe somente contagens. Dados de clientes e links de checkout também são migrados: escolha conscientemente o banco de destino. Conflitos cancelam a transação completa.
+## Limites
 
-## 6. Verificação depois do deploy
+A conexão real nas suas contas e o deploy externo precisam ser validados depois da configuração. Testes locais usam o SQL PostgreSQL em PGlite e substituem o transporte HTTP. O pagamento ainda é demonstrativo. Não há gateway financeiro real, módulo de associações ou processamento automático de mídia recebida pelo WhatsApp nesta entrega. Reservas vencidas são liberadas em operações/painel, sem cron externo. O lock global é adequado ao escopo atual de uma loja e pode precisar de refinamento para volumes maiores.
 
-1. Abra /api/health: deve responder ok. Isso só comprova o servidor HTTP.
-2. Faça login e abra o painel. Se o banco não foi configurado/migrado, a leitura não funcionará.
-3. Cadastre um produto, recarregue e confira a persistência; novo deploy não deve apagar os dados.
-4. Execute o teste de IA no painel. Ele faz uma pequena chamada real, mas não cadastra produtos.
-5. De outro número, envie texto para o WhatsApp conectado. Confira recebimento e resposta no painel/celular.
-6. Crie um pedido e confira que o link aponta ao domínio público. Se DEMO_MODE=true, conclua um pagamento fictício e confira estoque e status.
-
-O adaptador atual do WhatsApp recebe texto e ignora grupos, mensagens próprias e JIDs @lid sem normalização. Catálogo por áudio/imagem funciona na interface de IA; encaminhar mídia do WhatsApp automaticamente à IA exige integração adicional.
-
-## Limites desta entrega
-
-Testes locais não equivalem a um deploy validado nas suas contas. Você deve executar a migração e cadastrar seus próprios segredos. Transações de negócio usam um lock do PostgreSQL compartilhado entre instâncias da aplicação para preservar a consistência do estoque em uma loja; para volumes elevados, esse lock deverá ser refinado por recurso. Reservas expiradas são liberadas quando o aplicativo processa operações/leitura do painel, sem um cron externo. Não há gateway de pagamento real nem garantia de entrega de mensagens apenas pelo retorno 2xx da Evolution.
-
-## Diagnóstico de erro 500 no login (edição 2.0.1)
-
-O login consulta rate_limits e sessions no banco; uma falha de banco pode ocorrer antes de conferir a senha. A resposta pública é genérica para não expor credenciais. Nos logs do servidor, procure `[tray-balcao]` com `code` e `hint`. A classificação contém apenas valores fixos, sem erro bruto, URI ou parâmetros. Em Vercel, reproduza a falha e abra Logs do projeto/deploy correspondente.
-
-- 42P01/3F000: migração ausente ou aplicada em outro projeto.
-- 28P01/28000: autenticação PostgreSQL recusada.
-- SELF_SIGNED_CERT_IN_CHAIN/UNABLE_TO_VERIFY_LEAF_SIGNATURE: configure DATABASE_SSL_CA com a CA do projeto; não desative TLS.
-- ENOTFOUND/ENETUNREACH: confira host e URI do pooler.
-- DATABASE_UNCONFIGURED: DATABASE_URL ausente no ambiente do deploy.
-
-Para testar a partir do computador, cadastre as mesmas configurações em .env.local e execute `npm run db:check`. Isso confirma a conexão a partir desse computador, não a conectividade da Vercel. Não compartilhe o arquivo de ambiente. Após alterar variáveis na Vercel, gere novo deploy.
+Referências oficiais: https://supabase.com/docs/guides/api/api-keys e https://supabase.com/docs/guides/database/functions.
