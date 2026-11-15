@@ -111,8 +111,7 @@ export function Login({
           <div className="login-help">
             <ShieldCheck size={17} />
             <span>
-              Primeiro acesso? Use as credenciais definidas no arquivo{" "}
-              <code>.env.local</code> do projeto.
+              Entre com a conta de administrador cadastrada para esta loja.
             </span>
           </div>
         </form>

@@ -1,4 +1,5 @@
 import "server-only";
+import {supabaseAuthEnabled,signInSupabase,resolveSupabaseAuth,signOutSupabase,refreshCookieName,type AuthState} from './supabase-auth.ts';
 import { usesSupabase, supabaseRpc } from "./supabase.ts";
 
 import { createHash, randomBytes, scryptSync, timingSafeEqual, } from "node:crypto";
@@ -30,7 +31,8 @@ export async function limit(key: string, max: number, windowMs: number) {
   if (count > max)
         fail(429, "Muitas tentativas. Aguarde alguns minutos.");
 }
-export async function login(email: unknown, password: unknown) {
+export async function login(email: unknown, password: unknown):Promise<{token:string;expiresAt:string;refreshToken?:string}> {
+    if(supabaseAuthEnabled()) return signInSupabase(email,password);
     const expectedEmail = process.env.ADMIN_EMAIL, expectedPassword = process.env.ADMIN_PASSWORD, hash = process.env.ADMIN_PASSWORD_HASH;
     if (!expectedEmail || (!expectedPassword && !hash))
         fail(503, "Configure ADMIN_EMAIL e ADMIN_PASSWORD no .env.local antes de entrar.");
@@ -58,7 +60,24 @@ export async function login(email: unknown, password: unknown) {
         .run(digest(token), expiresAt));
     return { token, expiresAt };
 }
-export async function authenticated(request: NextRequest) {
+export function localScreenshotAccess(request: NextRequest): boolean {
+    if (process.env.LOCAL_SCREENSHOT_MODE !== "true" || process.env.NODE_ENV !== "development" || process.env.VERCEL)
+        return false;
+    try {
+        const target = new URL(request.url);
+        const host = new URL(`http://${request.headers.get("host") || ""}`);
+        return target.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(target.hostname)
+            && ["localhost", "127.0.0.1", "[::1]"].includes(host.hostname);
+    } catch { return false; }
+}
+export async function requestAuth(request: NextRequest):Promise<AuthState> {
+    if(localScreenshotAccess(request)) return {authenticated:true};
+    if(supabaseAuthEnabled()) return resolveSupabaseAuth(request.cookies.get(cookieName)?.value,request.cookies.get(refreshCookieName)?.value);
+    return {authenticated:await legacyAuthenticated(request)};
+}
+export async function authenticated(request: NextRequest) {return (await requestAuth(request)).authenticated;}
+async function legacyAuthenticated(request: NextRequest) {
+    if (localScreenshotAccess(request)) return true;
     const token = request.cookies.get(cookieName)?.value;
     if (!token)
         return false;
@@ -68,10 +87,12 @@ export async function authenticated(request: NextRequest) {
         .get(digest(token), new Date().toISOString()));
 }
 export async function requireAuth(request: NextRequest) {
-    if (!(await authenticated(request)))
-        fail(401, "Entre na sua conta para continuar.");
+    const state=await requestAuth(request);
+    if (!state.authenticated) fail(401, "Entre na sua conta para continuar.");
+    return state;
 }
 export async function logout(request: NextRequest) {
+    if(supabaseAuthEnabled()) {await signOutSupabase(request.cookies.get(cookieName)?.value,request.cookies.get(refreshCookieName)?.value);return;}
     const token = request.cookies.get(cookieName)?.value;
     if (token && usesSupabase()) { await supabaseRpc("sessionDelete",{tokenHash:digest(token)}); return; }
     if (token)

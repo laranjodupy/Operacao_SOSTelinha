@@ -3,7 +3,9 @@ import { existsSync } from "node:fs";
 import { loadEnvFile } from "node:process";
 if (existsSync(".env.local")) loadEnvFile(".env.local");
 const supabase = process.env.DATABASE_PROVIDER === 'supabase' || (process.env.DATABASE_PROVIDER !== 'postgres' && process.env.DATABASE_PROVIDER !== 'sqlite' && !!(process.env.SUPABASE_URL || process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY));
+const supabaseAuth=!!process.env.VERCEL || process.env.AUTH_PROVIDER==='supabase' || (process.env.AUTH_PROVIDER!=='local' && !!process.env.SUPABASE_URL);
 const checks = [
+  ['Supabase Auth configurado', !supabaseAuth || !!(process.env.SUPABASE_URL && (process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY))],
   ['Supabase URL e chave configuradas', !supabase || !!(process.env.SUPABASE_URL && (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY))],
   ["Banco remoto configurado na Vercel", !process.env.VERCEL || !!process.env.DATABASE_URL || supabase],
   ["Node.js >= 24", Number(process.versions.node.split(".")[0]) >= 24],
@@ -11,12 +13,12 @@ const checks = [
     "Credenciais do administrador",
     !!(
       process.env.ADMIN_EMAIL &&
-      (process.env.ADMIN_PASSWORD || process.env.ADMIN_PASSWORD_HASH)
+      (supabaseAuth || process.env.ADMIN_PASSWORD || process.env.ADMIN_PASSWORD_HASH)
     ),
   ],
   [
     "Senha de exemplo substituída",
-    process.env.ADMIN_PASSWORD !== "troque-por-uma-senha-longa-e-exclusiva",
+    supabaseAuth || process.env.ADMIN_PASSWORD !== "troque-por-uma-senha-longa-e-exclusiva",
   ],
   ["APP_URL configurada", !!process.env.APP_URL],
   [

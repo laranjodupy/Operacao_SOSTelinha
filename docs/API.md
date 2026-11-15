@@ -98,3 +98,8 @@ Os contratos completos, headers e exemplos estão em `INTEGRACOES.md`. A entrada
 ## Extração v1.1
 
 `POST /ai` recebe `{ task: "extract_product", text, image, audio }`. Image e audio são opcionais e mutuamente exclusivos; cada mídia contém `{ mimeType, dataBase64 }` e aceita até 3 MB. A resposta inclui `products` (de 1 a 20 rascunhos), o primeiro item em `product` para compatibilidade e, quando houver áudio, `transcription`. Os campos do produto usam preço unitário em centavos e quantidade inteira. Avisos em `warnings` são exibidos durante a revisão. `extract_product` nunca grava o catálogo.
+
+
+## Autenticação 2.2
+
+Em produção na Vercel, POST /api/login usa Supabase Auth (e-mail e senha). ADMIN_EMAIL autoriza o administrador da loja; a senha é gerenciada no Supabase. A rota responde apenas `{ "ok": true }` e grava access/refresh tokens em cookies HttpOnly. GET /api/session valida a identidade no Supabase e renova a sessão quando necessário. POST /api/logout revoga a sessão atual e apaga ambos os cookies. Todas estas respostas usam Cache-Control: no-store. Login e logout exigem Origin igual a APP_URL. Não há signup público nem recuperação de senha pela interface nesta versão.

@@ -13,3 +13,5 @@ backups/
 
 !.env.vercel.example
 .vercel/
+
+.next-prints/

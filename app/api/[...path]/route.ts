@@ -1,13 +1,15 @@
+import { writeAuthCookies } from '@/lib/server/auth-cookies';
+import {supabaseAuthEnabled,type AuthState} from '@/lib/server/supabase-auth';
 import { safeDiagnostic } from "@/lib/server/diagnostics";
 import { NextRequest, NextResponse } from "next/server";
-import { authenticated, cookieName, limit, login, logout, requireAuth, sameOrigin, webhookAuth, } from "@/lib/server/auth";
+import { requestAuth, cookieName, limit, login, logout, sameOrigin, webhookAuth, } from "@/lib/server/auth";
 import { createOrder, createProductBatch, orderByToken, payDemo, products, receive, saveProduct, saveSettings, seedDemo, settings, snapshot, transitionOrder, updateConversation, expireOrders, } from "@/lib/server/store";
 import { aiTask, inbound, sendMessage } from "@/lib/server/integrations";
 import { HttpError, fail, record, text } from "@/lib/server/validation";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
-const json = (value: unknown, status = 200) => NextResponse.json(value, {
+const baseJson = (value: unknown, status = 200) => NextResponse.json(value, {
     status,
     headers: { "Cache-Control": "no-store" },
 });
@@ -47,32 +49,36 @@ async function handle(request: NextRequest, context: {
         path: string[];
     }>;
 }) {
+    let authState:AuthState|undefined;
+    const json=(value:unknown,status=200)=>{
+        const res=baseJson(value,status);
+        writeAuthCookies(res,authState,new URL(process.env.APP_URL||request.url).protocol==='https:');
+        return res;
+    };
     try {
         const { path } = await context.params, route = path.join("/"), method = request.method;
         if (route === "health" && method === "GET")
             return json({ ok: true, service: "tray-balcao" });
-        if (route === "session" && method === "GET")
-            return json({ authenticated: (await authenticated(request)) });
+        if (route === "session" && method === "GET") {
+            authState=await requestAuth(request);
+            return json({authenticated:authState.authenticated});
+        }
         if (route === "login" && method === "POST") {
             sameOrigin(request);
             // Shared persistent bucket also works behind a proxy without trusting spoofable forwarding headers.
-            (await limit("login", 30, 10 * 60000));
-            const b = await body(request), s = (await login(b.email, b.password)), res = json({ ok: true });
-            res.cookies.set(cookieName, s.token, {
-                httpOnly: true,
-                sameSite: "strict",
-                secure: new URL(process.env.APP_URL || request.url).protocol === "https:",
-                path: "/",
-                expires: new Date(s.expiresAt),
-            });
+            // Supabase Auth applies its own sign-in rate limits without depending on the Data API.
+            if(!supabaseAuthEnabled()) await limit("login",30,10*60000);
+            const b = await body(request), s = await login(b.email,b.password);
+            if(s.refreshToken) authState={authenticated:true,tokens:{...s,refreshToken:s.refreshToken}};
+            const res=json({ok:true});
+            if(!s.refreshToken) res.cookies.set(cookieName,s.token,{httpOnly:true,sameSite:'strict',secure:new URL(process.env.APP_URL||request.url).protocol==='https:',path:'/',expires:new Date(s.expiresAt)});
             return res;
         }
         if (route === "logout" && method === "POST") {
             sameOrigin(request);
             (await logout(request));
-            const res = json({ ok: true });
-            res.cookies.set(cookieName, "", { path: "/", maxAge: 0 });
-            return res;
+            authState={authenticated:false,clear:true};
+            return json({ok:true});
         }
         if (route === "webhooks/whatsapp" && method === "POST") {
             webhookAuth(request);
@@ -114,7 +120,8 @@ async function handle(request: NextRequest, context: {
                 return json({ status: o.status, number: o.number, total: o.total });
             }
         }
-        (await requireAuth(request));
+        authState=await requestAuth(request);
+        if(!authState.authenticated) fail(401,"Entre na sua conta para continuar.");
         if (method !== "GET")
             sameOrigin(request);
         if (method === "GET" && route === "dashboard")

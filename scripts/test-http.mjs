@@ -8,6 +8,8 @@ import assert from "node:assert/strict";
 const dir = mkdtempSync(join(tmpdir(), "tray-balcao-test-"));
 const env = {
   ...process.env,
+  AUTH_PROVIDER:"local",
+  DATABASE_PROVIDER:"sqlite",
   PORT: "3467",
   HOSTNAME: "127.0.0.1",
   APP_URL: "http://127.0.0.1:3467",

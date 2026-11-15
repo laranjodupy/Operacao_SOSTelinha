@@ -1,6 +1,6 @@
 {
   "name": "tray-balcao",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "private": true,
   "packageManager": "npm@11.9.0",
   "scripts": {
@@ -15,9 +15,12 @@
     "test:workflow": "node scripts/validate-workflow.mjs",
     "check:ai": "node scripts/check-ai.mjs",
     "db:check": "node --conditions=react-server --experimental-strip-types scripts/check-db.mjs",
-    "db:import-sqlite": "node --conditions=react-server scripts/import-sqlite.mjs"
+    "db:import-sqlite": "node --conditions=react-server scripts/import-sqlite.mjs",
+    "dev:prints": "node --conditions=react-server scripts/dev-prints.mjs",
+    "test:auth:http": "node scripts/test-auth-http.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.119.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.16.0",

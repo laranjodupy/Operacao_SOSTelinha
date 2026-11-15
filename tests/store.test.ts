@@ -1,3 +1,4 @@
+process.env.AUTH_PROVIDER='local';
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { db, transaction } from "../lib/server/db.ts";

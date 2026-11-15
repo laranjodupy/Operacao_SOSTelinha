@@ -1,6 +1,8 @@
 import "server-only";
 // Only fixed classifications may be logged: never raw messages, SQL, URLs or parameters.
 const hints: Record<string,string> = {
+  SUPABASE_AUTH_SERVICE:'Falha ao acessar Supabase Auth. Confira SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY e disponibilidade do serviço.',
+
   SUPABASE_CONFIG: 'Configure SUPABASE_URL e SUPABASE_SECRET_KEY (ou SUPABASE_SERVICE_ROLE_KEY) no servidor.',
   SUPABASE_AUTH: 'A chave de servidor do Supabase foi recusada. Confira a Secret key, o projeto e as permissões da RPC.',
   SUPABASE_MIGRATION: 'Execute 001_initial.sql e 002_data_api.sql no SQL Editor e confira se a Data API está habilitada.',
